@@ -1,0 +1,7 @@
+docker-workflow
+ansible
+nexus-jenkins-plugin
+workflow-aggregator
+blueocean
+credentials-binding
+ssh-agent

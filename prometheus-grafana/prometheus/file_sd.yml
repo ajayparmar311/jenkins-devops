@@ -1,0 +1,10 @@
+- targets: 
+  - 192.168.56.14:9100
+  labels:
+    team: "development"
+    region: "ratlam"
+    status: "test"
+- targets:
+  - mysqld_exporter:9104 
+  labels:
+    type: "mysql-exporter"

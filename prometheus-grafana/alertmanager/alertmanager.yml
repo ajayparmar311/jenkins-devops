@@ -1,0 +1,16 @@
+# alertmanager.yml
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'ajju.parmar311@gmail.com'
+  smtp_auth_username: 'ajju.parmar311@gmail.com'
+  smtp_auth_password: 'psgmfkcqjfpmamnj'
+
+route:
+  receiver: 'default-receiver'
+
+receivers:
+  - name: 'default-receiver'
+    email_configs:
+      - to: 'ajayp.parmar311@gmail.com'
+
