@@ -25,8 +25,8 @@ scrape_configs:
     - file_sd.yml
 - job_name: ec2
   ec2_sd_configs:
-  - access_key: AKIAYGQBKK4TXBJICUX2
-    secret_key: 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
+  #- remove_access_key: <value>
+  #  remove_secret_key: <value>
     region: us-east-1
     port: 9100
   relabel_configs:
