@@ -34,16 +34,16 @@ services:
   #    - monitoring
   #  volumes:
   #    - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
-  #blackbox_exporter:
-  #  image: quay.io/prometheus/blackbox-exporter:latest
-  #  container_name: blackbox_exporter
-  #  ports:
-  #    - "9115:9115"
-  #  volumes:
-  #    - ./blackbox_exporter/blackbox.yml:/config/blackbox.yml
-  #  command:
-  #    - '--config.file=/config/blackbox.yml'
-  #  restart: unless-stoppe
+  blackbox_exporter:
+    image: quay.io/prometheus/blackbox-exporter:latest
+    container_name: blackbox_exporter
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./blackbox_exporter/blackbox.yml:/config/blackbox.yml
+    command:
+      - '--config.file=/config/blackbox.yml'
+    restart: unless-stopped
   mysql:
     image: mysql-with-tools:8.0
     container_name: mysql-server
@@ -57,23 +57,25 @@ services:
       - mysql_data:/var/lib/mysql
     networks:
       - monitoring
-  #mysqld_exporter:
-  #  image: prom/mysqld-exporter
-  #  container_name: mysqld_exporter
-  #  restart: always
-  #  ports:
-  #    - "9104:9104"
-  #  environment:
-  #    - DATA_SOURCE_NAME=exporter:password@(mysql-server:3306)/
-  #  networks:
-  #    - monitoring
-  #  volumes:
-  #    - ./mysql_exporter/config.my-cnf:/.my.cnf
-  #  command: ["--config.my-cnf=/.my.cnf"]
+  mysqld_exporter:
+    image: prom/mysqld-exporter
+    container_name: mysqld_exporter
+    restart: always
+    ports:
+      - "9104:9104"
+    environment:
+      - DATA_SOURCE_NAME=exporter:password@(mysql-server:3306)/
+    networks:
+      - monitoring
+    volumes:
+      - ./mysql_exporter/config.my-cnf:/.my.cnf
+    command: ["--config.my-cnf=/.my.cnf"]
   loki:
     image: grafana/loki:latest
     ports:
       - "3100:3100"
+    volumes:
+      - ./loki/local-config.yaml:/etc/loki/local-config.yaml
     command: -config.file=/etc/loki/local-config.yaml
     networks:
       - monitoring

@@ -23,6 +23,7 @@ scrape_configs:
   file_sd_configs:
   - files:
     - file_sd.yml
+<<<<<<< Updated upstream
 - job_name: ec2
   ec2_sd_configs:
   - access_key: <value>
@@ -35,3 +36,5 @@ scrape_configs:
     target_label: __address__
     replacement: ${1}:9100
     separator: ''
+=======
+>>>>>>> Stashed changes

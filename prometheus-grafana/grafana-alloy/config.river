@@ -1,0 +1,17 @@
+prometheus.scrape "self" {
+  targets = ["localhost:12345"] # change if scraping another service
+}
+
+loki.source.file "syslog" {
+  path = "/var/log/syslog"
+  labels = {
+    job = "syslog"
+  }
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push" # Replace if using Loki
+  }
+}
+
