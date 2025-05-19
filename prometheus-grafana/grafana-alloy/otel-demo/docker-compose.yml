@@ -18,3 +18,5 @@ services:
       - '12345:12345' # (Optional) Alloy HTTP UI
     command: ['--config.file=/etc/alloy/config.river']
     restart: unless-stopped
+    #networks:
+    #  - monitoring
