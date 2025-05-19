@@ -1,0 +1,51 @@
+otelcol.receiver.otlp "default" {
+  protocols {
+    http {
+      endpoint = "0.0.0.0:4318"
+    }
+  }
+}
+
+otelcol.exporter.prometheus "metrics" {
+  forward_to = [otelcol.processor.batch.default.metrics.input]
+}
+
+otelcol.exporter.loki "logs" {
+  endpoint = "http://loki:3100/loki/api/v1/push"
+}
+
+otelcol.processor.batch "default" {}
+
+otelcol.processor.batch "logs" {
+  output {
+    logs = [otelcol.exporter.loki.logs.input]
+  }
+}
+
+otelcol.processor.batch "metrics" {
+  output {
+    metrics = [otelcol.exporter.prometheus.metrics.input]
+  }
+}
+
+otelcol.service "otel" {
+  pipelines = {
+    logs = {
+      receivers  = [otelcol.receiver.otlp.default]
+      processors = [otelcol.processor.batch.logs]
+      exporters  = [otelcol.exporter.loki.logs]
+    }
+
+    metrics = {
+      receivers  = [otelcol.receiver.otlp.default]
+      processors = [otelcol.processor.batch.metrics]
+      exporters  = [otelcol.exporter.prometheus.metrics]
+    }
+
+    traces = {
+      receivers  = [otelcol.receiver.otlp.default]
+      processors = [otelcol.processor.batch.default]
+      exporters  = []  # Add a Tempo exporter if you wish
+    }
+  }
+}

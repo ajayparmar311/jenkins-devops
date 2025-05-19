@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  app:
+    build: ./app
+    container_name: otel-python-app
+    depends_on:
+      - alloy
+    ports:
+      - '8000:8000'
+  alloy:
+    image: grafana/alloy:latest
+    container_name: grafana-alloy
+    volumes:
+      - ./config.river:/etc/alloy/config.river
+    ports:
+      - '4318:4318' # OTLP receiver
+      - '12345:12345' # (Optional) Alloy HTTP UI
+    command: ['--config.file=/etc/alloy/config.river']
+    restart: unless-stopped
