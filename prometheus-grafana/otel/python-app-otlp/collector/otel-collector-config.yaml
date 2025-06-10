@@ -1,0 +1,50 @@
+receivers:
+  hostmetrics:
+    collection_interval: 60s
+    root_path: /hostfs
+    scrapers:
+      cpu: {}
+      memory: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      network: {}
+      # Add other scrapers as needed
+
+processors:
+  batch: {}
+  resourcedetection:
+    detectors: [gcp,env, system] # Adds host metadata
+  # Add required resource attributes for GMP
+  resource:
+    attributes:
+      - key: service.name
+        value: "hostmetrics-vm" # Unique identifier for your VM
+        action: insert
+      - key: gcp.resource_type
+        value: "prometheus_target" # Required for GMP ingestion
+        action: insert
+
+exporters:
+  prometheusremotewrite:
+    endpoint: "https://prometheus.googleapis.com/v1/projects/my-kube-project-429018/locations/global/prometheus/api/v1/write"
+    auth:
+      authenticator: googleclientauth
+  googlecloud:
+    project: my-kube-project-429018
+    user_agent: "otel-collector"
+    metric:
+      prefix: "custom.googleapis.com/hostmetrics"
+      # Optional: send custom domain metric
+
+service:
+  #extensions: [googleclientauth] # Required for GCP auth
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [resourcedetection, resource, batch]
+      exporters: [googlecloud]
+
+extensions:
+  googleclientauth:
+    audience: https://monitoring.googleapis.com/

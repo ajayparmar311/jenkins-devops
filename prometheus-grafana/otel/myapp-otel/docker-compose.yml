@@ -1,0 +1,47 @@
+services:
+  app:
+    build:
+      context: ./app
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://collector:4317
+      OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: true
+    depends_on:
+      - collector
+    ports:
+      - "5000:5000"
+    networks:
+      - otlp
+
+  collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: ht-otel-collector
+    volumes:
+      - ./collector/collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - "1888:1888" # pprof extension
+      - "8888:8888" # Prometheus metrics exposed by the Collector
+      - "8889:8889" # Prometheus exporter metrics
+      - "13133:13133" # health_check extension
+      - "4317:4317" # OTLP gRPC receiver
+      - "4318:4318" # OTLP http receiver
+      - "55679:55679" # zpages extension
+    networks:
+      - otlp
+
+  jaeger:
+    container_name: ht-jaeger
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14250:14250"
+      - "14268:14268"
+      - "14269:14269"
+      - "9411:9411"
+    networks:
+      - otlp
+  
+networks:
+  otlp:

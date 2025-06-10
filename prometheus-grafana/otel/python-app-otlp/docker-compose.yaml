@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+
+  python-app:
+    image: python:3.9
+    container_name: python-app
+    volumes:
+      - ./app:/app  # Mount the app code
+      - ./logs:/logs  # Shared logs directory
+    working_dir: /app
+    command: >
+      sh -c "
+        pip install --no-cache-dir -r requirements.txt &&
+        python app.py"
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.98.0
+    container_name: otel-collector
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ./logs:/logs  # Mount logs to Collector
+    command: --config=/etc/otel-collector-config.yaml
+    restart: unless-stopped
+    depends_on:
+      - loki

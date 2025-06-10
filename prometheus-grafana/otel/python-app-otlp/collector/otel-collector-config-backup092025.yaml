@@ -1,0 +1,108 @@
+receivers:
+  #filelog:
+  #  include: [ "/logs/*.log" ]  # Adjust the path to your log file
+  #  start_at: beginning
+  #  include_file_name: true
+    #operators:
+      #- type: json_parser  # If logs are JSON, use this
+      #  parse_from: body
+      #- type: move  # Example of moving file_name to resource
+      #  from: attributes["log.file.name"]
+      #  to: resource["log.file.name"]
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  hostmetrics:
+    collection_interval: 60s 
+    scrapers:
+      cpu:
+      disk:
+      #filesystem:
+      #load:
+      #memory:
+      #network:
+      #process:
+      #processes:
+      #paging:
+
+processors:
+
+  filter/auto_metrics:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          - '^.*target_info.*$'
+          - '^.*scope_info.*$'
+          - '^otelcol_.*$'
+
+  resource:
+    attributes:
+      - key: "location"
+        value: "us-central1"  # Valid GCP region
+        action: upsert
+      - key: "cluster"
+        value: "local-cluster"
+        action: upsert
+      - key: "namespace"
+        value: "default"
+        action: upsert
+      - key: "host.name"
+        from_attribute: "host.name"
+        action: insert
+      - key: "service.name"
+        value: "hostmetrics"  # Helps identify source
+        action: upsert
+
+  # Required for GMP compatibility
+  transform:
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(attributes["exported_location"], attributes["location"])
+          - delete_key(attributes, "location")
+  # Conservative batch settings
+  batch:
+    # batch metrics before sending to reduce API usage
+    send_batch_max_size: 20
+    send_batch_size: 10
+    timeout: 2s
+
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 65
+  
+  # Correct metricstransform configuration
+  metricstransform:
+    transforms:
+      - include: system.cpu.time
+        action: update
+        operations:
+          - action: add_label
+            new_label: "ordered_timestamp"
+            new_value: "true"
+
+
+
+exporters:
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"  # Replace with your Loki URL
+    #default_labels_enabled: true
+    #labels:
+    #  job: "python-app"
+    #  instance: "docker"
+  debug:
+    verbosity: detailed
+  googlemanagedprometheus:
+    project: "my-kube-project-429018"
+
+service:
+  pipelines:
+    metrics:
+      receivers: [ hostmetrics ]
+      processors: [filter/auto_metrics, resource, transform,metricstransform, batch]
+      exporters: [ googlemanagedprometheus]
+
