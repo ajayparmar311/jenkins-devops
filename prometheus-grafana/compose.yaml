@@ -130,7 +130,7 @@ services:
     networks:
       - monitoring
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.128.0
     container_name: otel-collector
     volumes:
       - ./otel/python-app-otlp/collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
@@ -139,7 +139,7 @@ services:
       - /proc:/hostfs/proc:ro
       - /sys:/hostfs/sys:ro
       - /etc:/hostfs/etc:ro
-      - ./otel/python-app-otlp/app/my-kube-project-429018-47e6566c031a.json:/etc/otelcol-contrib/key.json
+      - ./secrets_and-keys/my-kube-project-429018-47e6566c031a.json:/etc/otelcol-contrib/key.json
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /etc/otelcol-contrib/key.json
     #network_mode: "host"      # So it can access host network interfaces

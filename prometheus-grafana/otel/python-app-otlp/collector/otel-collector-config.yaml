@@ -1,4 +1,8 @@
 receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
   hostmetrics:
     collection_interval: 60s
     root_path: /hostfs
@@ -14,7 +18,7 @@ receivers:
 processors:
   batch: {}
   resourcedetection:
-    detectors: [gcp,env, system] # Adds host metadata
+    detectors: [env, system] # Adds host metadata
   # Add required resource attributes for GMP
   resource:
     attributes:
@@ -24,8 +28,21 @@ processors:
       - key: gcp.resource_type
         value: "prometheus_target" # Required for GMP ingestion
         action: insert
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 65
+    spike_limit_percentage: 20
+  
 
 exporters:
+  loki:
+    endpoint: "http://prometheus-grafana-loki-1:3100/loki/api/v1/push"  # Replace with your Loki URL
+    default_labels_enabled:
+      exporter: false
+      job: true
+      instance: true
+      level: true
+
   prometheusremotewrite:
     endpoint: "https://prometheus.googleapis.com/v1/projects/my-kube-project-429018/locations/global/prometheus/api/v1/write"
     auth:
@@ -35,15 +52,22 @@ exporters:
     user_agent: "otel-collector"
     metric:
       prefix: "custom.googleapis.com/hostmetrics"
-      # Optional: send custom domain metric
+    log:
+      default_log_name: opentelemetry.io/collector-exported-log
+  debug:
+    verbosity: detailed
 
 service:
   #extensions: [googleclientauth] # Required for GCP auth
   pipelines:
     metrics:
-      receivers: [hostmetrics]
+      receivers: [otlp]
       processors: [resourcedetection, resource, batch]
       exporters: [googlecloud]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter,batch]
+      exporters: [loki]
 
 extensions:
   googleclientauth:
