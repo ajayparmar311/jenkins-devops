@@ -1,0 +1,143 @@
+# fastapi_log_server.py
+from fastapi import FastAPI, Request, HTTPException
+from prometheus_client import start_http_server, Counter, Histogram, Gauge, generate_latest
+from pydantic import BaseModel
+import logging
+import time
+from typing import Optional
+
+app = FastAPI()
+
+# ========== MODELS ==========
+class AppInfo(BaseModel):
+    app_name: str
+    version: str
+    environment: str
+
+class LogData(BaseModel):
+    app_info: AppInfo
+    message_id: str
+    event_type: str
+    event_value: str
+    timestamp: Optional[str] = None
+    duration_ms: Optional[int] = None
+    user_id: Optional[str] = None
+
+# ========== METRICS DEFINITION ==========
+EVENT_COUNTER = Counter(
+    'app_events_total',
+    'Total count of application events by type and value',
+    ['app_name', 'version', 'environment', 'event_type', 'event_value']
+)
+
+ERROR_COUNTER = Counter(
+    'app_errors_total',
+    'Total count of application errors',
+    ['app_name', 'version', 'environment', 'error_type']
+)
+
+REQUEST_LATENCY = Histogram(
+    'api_request_duration_ms',
+    'Duration of API requests in milliseconds',
+    ['app_name', 'version', 'environment', 'status'],
+    buckets=[50, 100, 200, 500, 1000, 2000]
+)
+
+ACTIVE_APPS = Gauge(
+    'active_applications',
+    'Number of active applications sending logs',
+    ['app_name', 'version', 'environment']
+)
+
+# Track last received timestamp per app
+LAST_EVENT_TIMESTAMP = Gauge(
+    'app_last_event_timestamp',
+    'Timestamp of last received event per application',
+    ['app_name', 'version', 'environment']
+)
+
+# ========== HELPER FUNCTIONS ==========
+def record_metrics(log_data: LogData):
+    """Extract and record metrics from log data"""
+    app_info = log_data.app_info
+    labels = {
+        'app_name': app_info.app_name,
+        'version': app_info.version,
+        'environment': app_info.environment
+    }
+    
+    # Always count the event
+    EVENT_COUNTER.labels(
+        **labels,
+        event_type=log_data.event_type,
+        event_value=log_data.event_value
+    ).inc()
+    
+    # Track active applications
+    ACTIVE_APPS.labels(**labels).set(1)
+    LAST_EVENT_TIMESTAMP.labels(**labels).set_to_current_time()
+    
+    # Special handling for API requests
+    if log_data.event_type == 'API_REQUEST':
+        duration = log_data.duration_ms or 0
+        REQUEST_LATENCY.labels(
+            **labels,
+            status=log_data.event_value
+        ).observe(duration)
+        
+        if 'error' in log_data.event_value:
+            ERROR_COUNTER.labels(
+                **labels,
+                error_type=log_data.event_value
+            ).inc()
+
+# ========== API ENDPOINTS ==========
+@app.post("/log")
+async def handle_log(log_data: LogData):
+    try:
+        # Add timestamp if not provided
+        if not log_data.timestamp:
+            log_data.timestamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        
+        # Process the log and record metrics
+        record_metrics(log_data)
+        
+        # Here you would normally store the log
+        logging.info(f"Received log: {log_data.message_id}")
+        
+        return {
+            "status": "success",
+            "message_id": log_data.message_id,
+            "processed_at": time.time()
+        }
+    except Exception as e:
+        logging.error(f"Error processing log: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/metrics")
+async def metrics():
+    return Response(
+        content=generate_latest(),
+        media_type="text/plain"
+    )
+# ========== STARTUP ==========
+@app.on_event("startup")
+async def startup_event():
+    # Start Prometheus metrics server
+    logging.info("Metrics server started on port 8000")
+    logging.info("FastAPI server ready to receive logs")
+
+if __name__ == "__main__":
+    import uvicorn
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=5000,
+        log_config=None  # Use default logging config
+    )

@@ -1,3 +1,14 @@
 opentelemetry-distro
 opentelemetry-exporter-otlp
 opentelemetry-sdk
+pika
+opentelemetry-instrumentation
+opentelemetry-api
+requests~=2.28.2
+flask
+prometheus_client
+opentelemetry-exporter-prometheus
+fastapi~=0.103.1
+uvicorn~=0.23.2
+pydantic~=2.4.2
+prometheus-client>=0.12.0

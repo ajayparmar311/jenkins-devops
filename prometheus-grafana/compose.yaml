@@ -124,6 +124,7 @@ services:
       - ./otel/python-app-otlp/logs:/logs  # Shared logs directory
     ports:
       - "5000:5000"
+      - "8000:8000"
     depends_on:
       - otel-collector
     restart: unless-stopped
@@ -139,6 +140,7 @@ services:
       - /proc:/hostfs/proc:ro
       - /sys:/hostfs/sys:ro
       - /etc:/hostfs/etc:ro
+      - ./otel/python-app-otlp/otel_storage:/otel_storage
       - ./secrets_and-keys/my-kube-project-429018-47e6566c031a.json:/etc/otelcol-contrib/key.json
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /etc/otelcol-contrib/key.json
@@ -154,8 +156,32 @@ services:
     restart: unless-stopped
     depends_on:
       - loki
+      #- rabbitmq
     networks:
-      - monitoring  
+      - monitoring
+  #rabbitmq:
+  #  image: rabbitmq:4-management
+  #  container_name: rabbitmq
+  #  ports:
+  #    - "5672:5672"  # AMQP port
+  #    - "15672:15672"  # Management UI port
+  #  tty: true
+  #  stdin_open: true
+  #  restart: unless-stopped
+  #  networks:
+  #    - monitoring 
+  #flask-app:
+  #  build:
+  #    context: ./otel/python-app-otlp/app-flask
+  #    dockerfile: Dockerfile
+  #  container_name: flask-app
+  #  ports:
+  #    - "5001:5001"
+  #  depends_on:
+  #    - otel-collector
+  #  restart: unless-stopped
+  #  networks:
+  #    - monitoring
 
 volumes:
   prom_data:
