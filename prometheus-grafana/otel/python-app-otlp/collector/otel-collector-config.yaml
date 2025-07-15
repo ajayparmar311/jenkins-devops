@@ -12,10 +12,7 @@ receivers:
       cpu: {}
       memory: {}
       disk: {}
-      filesystem: {}
       load: {}
-      network: {}
-      # Add other scrapers as needed
   prometheus:
     config:
       scrape_configs:
@@ -41,11 +38,43 @@ processors:
       - key: gcp.resource_type
         value: "prometheus_target" # Required for GMP ingestion
         action: insert
+  resource/delete_attr:
+    attributes:
+      - key: service.instance.id
+        action: delete
+  attributes/strip_all:
+    actions:
+      - key: .* 
+        action: delete
   memory_limiter:
     check_interval: 1s
     limit_percentage: 65
     spike_limit_percentage: 20
-  
+
+  transform/remove_scope: 
+    metric_statements:
+      - context: metric
+        statements:
+          - set(instrumentation_scope.name, "")
+          - set(instrumentation_scope.version, "")
+          - set(instrumentation_scope.attributes, nil)
+          - set(instrumentation_scope.dropped_attributes_count, 0)
+
+  transform/remove_attrs:
+    metric_statements:
+      - context: resource
+        statements:
+          - delete_matching_keys(attributes, "service.name")
+          - delete_matching_keys(attributes, "server.address")
+          - delete_matching_keys(attributes, "service.instance.id")
+          - delete_matching_keys(attributes, "server.port")
+          - delete_matching_keys(attributes, "url.scheme")
+          - delete_matching_keys(attributes, "gcp.resource_type")
+          - delete_matching_keys(attributes, "host.name")
+          - delete_matching_keys(attributes, "telemetry.sdk.language")
+          - delete_matching_keys(attributes, "telemetry.sdk.version")
+          - delete_matching_keys(attributes, "os.type")
+
 
 exporters:
   loki:
@@ -88,9 +117,9 @@ service:
   #extensions: [file_storage]
   pipelines:
     metrics:
-      receivers: [prometheus]
-      processors: [resourcedetection, resource, batch]
-      exporters: [googlecloud,debug]
+      receivers: [hostmetrics]
+      processors: [resource,transform/remove_scope, transform/remove_attrs,batch]
+      exporters: [debug, googlecloud]
     #logs:
     #  receivers: [otlp]
     #  processors: [memory_limiter,batch]
