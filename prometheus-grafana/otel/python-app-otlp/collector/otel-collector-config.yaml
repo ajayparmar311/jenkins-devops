@@ -91,25 +91,13 @@ exporters:
       storage: file_storage
 
   prometheusremotewrite:
-    endpoint: "https://prometheus.googleapis.com/v1/projects/my-kube-project-429018/locations/global/prometheus/api/v1/write"
-    auth:
-      authenticator: googleclientauth
+    endpoint: "http://victoria-metrics:8428/api/v1/write"
+
   googlecloud:
     project: my-kube-project-429018
     user_agent: "otel-collector"
     metric:
       prefix: "custom.googleapis.com/hostmetrics"
-    #log:
-    #  default_log_name: opentelemetry.io/collector-exported-log
-    #sending_queue:
-    #  enabled: true
-    #  storage: file_storage
-    #retry_on_failure: true
-    #retry_on_failure:
-    #  enabled: true
-    #  initial_interval: 5s
-    #  max_interval: 30s
-    #  max_elapsed_time: 300s
   debug:
     verbosity: detailed
 
@@ -117,9 +105,9 @@ service:
   #extensions: [file_storage]
   pipelines:
     metrics:
-      receivers: [hostmetrics]
+      receivers: [prometheus]
       processors: [resource,transform/remove_scope, transform/remove_attrs,batch]
-      exporters: [debug, googlecloud]
+      exporters: [prometheusremotewrite]
     #logs:
     #  receivers: [otlp]
     #  processors: [memory_limiter,batch]

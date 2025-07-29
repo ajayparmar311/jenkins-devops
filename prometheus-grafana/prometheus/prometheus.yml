@@ -23,3 +23,7 @@ scrape_configs:
   file_sd_configs:
   - files:
     - file_sd.yml
+
+remote_write:
+  - url: "http://victoria-metrics:8428/api/v1/write"
+

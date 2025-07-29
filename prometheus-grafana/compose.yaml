@@ -12,6 +12,15 @@ services:
     volumes:
       - ./prometheus:/etc/prometheus
       - prom_data:/prometheus
+  # for long term prometheus databasck
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics
+    container_name: victoria-metrics
+    ports:
+      - "8428:8428"
+    restart: unless-stopped
+    networks:
+      - monitoring
   grafana:
     image: grafana/grafana
     container_name: grafana
@@ -70,15 +79,15 @@ services:
   #  volumes:
   #    - ./mysql_exporter/config.my-cnf:/.my.cnf
   #  command: ["--config.my-cnf=/.my.cnf"]
-  loki:
-    image: grafana/loki:latest
-    ports:
-      - "3100:3100"
-    volumes:
-      - ./loki/local-config.yaml:/etc/loki/local-config.yaml
-    command: -config.file=/etc/loki/local-config.yaml
-    networks:
-      - monitoring
+  # loki:
+  #   image: grafana/loki:latest
+  #   ports:
+  #     - "3100:3100"
+  #   volumes:
+  #     - ./loki/local-config.yaml:/etc/loki/local-config.yaml
+  #   command: -config.file=/etc/loki/local-config.yaml
+  #   networks:
+  #     - monitoring
   #promtail:
   #  image: grafana/promtail:latest
   #  volumes:
@@ -154,8 +163,8 @@ services:
       - "55681:55681"
       - "13133:13133" # health check
     restart: unless-stopped
-    depends_on:
-      - loki
+    # depends_on:
+    #   - loki
       #- rabbitmq
     networks:
       - monitoring
