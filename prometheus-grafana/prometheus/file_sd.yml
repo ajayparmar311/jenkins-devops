@@ -8,3 +8,8 @@
   - mysqld_exporter:9104 
   labels:
     type: "mysql-exporter"
+- targets:
+  - python-app:5000 
+  labels:
+    type: "log-server"
+

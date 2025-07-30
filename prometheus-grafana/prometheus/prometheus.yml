@@ -24,6 +24,14 @@ scrape_configs:
   - files:
     - file_sd.yml
 
+# remote_write:
+#   - url: "http://192.168.1.9:8428/api/v1/write"
 remote_write:
-  - url: "http://victoria-metrics:8428/api/v1/write"
+  - url: https://monitoring.googleapis.com/v1/projects/my-kube-project-429018/location/global/prometheusWrite
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 200
+      capacity: 2500
+    authorization:
+      credentials_file: /etc/prometheus/gmp-sa-key.json
 

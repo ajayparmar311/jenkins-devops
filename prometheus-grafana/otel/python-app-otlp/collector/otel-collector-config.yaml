@@ -13,6 +13,7 @@ receivers:
       memory: {}
       disk: {}
       load: {}
+      filesystem: {}
   prometheus:
     config:
       scrape_configs:
@@ -91,7 +92,7 @@ exporters:
       storage: file_storage
 
   prometheusremotewrite:
-    endpoint: "http://victoria-metrics:8428/api/v1/write"
+    endpoint: "http://192.168.1.9:8428/api/v1/write"
 
   googlecloud:
     project: my-kube-project-429018
@@ -105,7 +106,7 @@ service:
   #extensions: [file_storage]
   pipelines:
     metrics:
-      receivers: [prometheus]
+      receivers: [prometheus,hostmetrics]
       processors: [resource,transform/remove_scope, transform/remove_attrs,batch]
       exporters: [prometheusremotewrite]
     #logs:
