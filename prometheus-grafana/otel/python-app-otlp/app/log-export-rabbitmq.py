@@ -80,7 +80,7 @@ async def handle_log(log_data: LogData):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-DOWNSTREAM_URL = "http://post-flask-app:5001/v1/metrics"  # Replace with target application URL
+DOWNSTREAM_URL = "http://192.168.1.9:5001/v1/metrics"  # Replace with target application URL
 
 def callback(ch, method, properties, body):
     """Callback function when RabbitMQ delivers a message"""
