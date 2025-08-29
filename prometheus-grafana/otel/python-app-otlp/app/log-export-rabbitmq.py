@@ -106,17 +106,23 @@ def callback(ch, method, properties, body):
 
 def start_consumer():
     """Start RabbitMQ consumer loop"""
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters(host="rabbitmq", port=5672)
-    )
-    channel = connection.channel()
-    channel.queue_declare(queue="logs_queue", durable=True)
+    try:
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host="rabbitmq", port=5672)
+        )
+        channel = connection.channel()
+        channel.queue_declare(queue="logs_queue", durable=True)
 
-    channel.basic_qos(prefetch_count=1)  # Fair dispatch
-    channel.basic_consume(queue="logs_queue", on_message_callback=callback)
+        channel.basic_qos(prefetch_count=1)
+        channel.basic_consume(queue="logs_queue", on_message_callback=callback)
 
-    logging.info("Starting RabbitMQ consumer...")
-    channel.start_consuming()
+        logging.info("✅ RabbitMQ consumer started. Waiting for messages...")
+        channel.start_consuming()   # <- BLOCKS FOREVER, keeps consumer alive
+    except Exception as e:
+        logging.error(f"❌ Consumer crashed: {e}")
+        time.sleep(5)
+        start_consumer()  # auto-restart if crash
+
 
 # Launch consumer in background thread when FastAPI starts
 @app.on_event("startup")
