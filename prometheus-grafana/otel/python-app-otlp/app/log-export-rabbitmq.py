@@ -83,20 +83,26 @@ async def handle_log(log_data: LogData):
 DOWNSTREAM_URL = "http://192.168.1.9:5001/v1/metrics"  # Replace with target application URL
 
 def callback(ch, method, properties, body):
-    """Callback function when RabbitMQ delivers a message"""
+    """Callback for RabbitMQ messages"""
     try:
         message = json.loads(body.decode())
         logging.info(f"Consumed from RabbitMQ: {message}")
 
-        # Forward to downstream application
-        resp = requests.post(DOWNSTREAM_URL, json=message)
-        logging.info(f"Forwarded to {DOWNSTREAM_URL}, status={resp.status_code}")
-        
-        # Acknowledge message only if successfully processed
-        ch.basic_ack(delivery_tag=method.delivery_tag)
+        # Send to downstream
+        resp = requests.post(DOWNSTREAM_URL, json=message, timeout=5)
+
+        if resp.status_code == 200:
+            logging.info(f"Forwarded to {DOWNSTREAM_URL} successfully")
+            ch.basic_ack(delivery_tag=method.delivery_tag)  # ✅ Ack only on success
+        else:
+            logging.error(f"Downstream returned {resp.status_code}, retry later")
+            # ❌ Do not ack → RabbitMQ keeps the message
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Network/Downstream error: {e}, retry later")
+        # ❌ No ack → message stays in queue
     except Exception as e:
-        logging.error(f"Failed to process message: {e}")
-        # If you want to requeue on error, don’t ack → RabbitMQ will redeliver
+        logging.error(f"Unexpected error: {e}")
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
 def start_consumer():
     """Start RabbitMQ consumer loop"""
