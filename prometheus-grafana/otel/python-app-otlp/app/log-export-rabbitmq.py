@@ -7,6 +7,8 @@ import uvicorn
 import re
 import pika
 import json
+import threading
+import requests
 
 app = FastAPI()
 
@@ -77,6 +79,44 @@ async def handle_log(log_data: LogData):
         logging.error(f"Error processing log: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+DOWNSTREAM_URL = "http://post-flask-app/v1/metrics"  # Replace with target application URL
+
+def callback(ch, method, properties, body):
+    """Callback function when RabbitMQ delivers a message"""
+    try:
+        message = json.loads(body.decode())
+        logging.info(f"Consumed from RabbitMQ: {message}")
+
+        # Forward to downstream application
+        resp = requests.post(DOWNSTREAM_URL, json=message)
+        logging.info(f"Forwarded to {DOWNSTREAM_URL}, status={resp.status_code}")
+        
+        # Acknowledge message only if successfully processed
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+    except Exception as e:
+        logging.error(f"Failed to process message: {e}")
+        # If you want to requeue on error, don’t ack → RabbitMQ will redeliver
+
+def start_consumer():
+    """Start RabbitMQ consumer loop"""
+    connection = pika.BlockingConnection(
+        pika.ConnectionParameters(host="rabbitmq", port=5672)
+    )
+    channel = connection.channel()
+    channel.queue_declare(queue="logs_queue", durable=True)
+
+    channel.basic_qos(prefetch_count=1)  # Fair dispatch
+    channel.basic_consume(queue="logs_queue", on_message_callback=callback)
+
+    logging.info("Starting RabbitMQ consumer...")
+    channel.start_consuming()
+
+# Launch consumer in background thread when FastAPI starts
+@app.on_event("startup")
+def startup_event():
+    consumer_thread = threading.Thread(target=start_consumer, daemon=True)
+    consumer_thread.start()
 
 
 
