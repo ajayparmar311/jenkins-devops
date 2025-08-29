@@ -145,16 +145,16 @@ services:
       context: ./otel/python-app-otlp/app 
       dockerfile: Dockerfile
     container_name: python-app
-    environment:
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-      OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true"
+    # environment:
+    #   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    #   OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true"
     volumes:
       - ./otel/python-app-otlp/logs:/logs  # Shared logs directory
     ports:
       - "5000:5000"
       - "8000:8000"
     depends_on:
-      - otel-collector
+      - rabbitmq
     restart: unless-stopped
     networks:
       - monitoring

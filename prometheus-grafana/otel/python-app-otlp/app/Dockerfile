@@ -10,6 +10,7 @@ COPY metrics_generator.py .
 COPY rebitmqtest.py .
 COPY health_metric.py .
 COPY poc_metric_transform.py .
+COPY log-export-rabbitmq.py .
 
 EXPOSE 5000
 
@@ -19,4 +20,4 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:5000/health || exit 1
 
-CMD ["python", "poc_metric_transform.py"]
+CMD ["python", "log-export-rabbitmq.py"]
