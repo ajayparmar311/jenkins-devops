@@ -101,6 +101,9 @@ exporters:
       prefix: "custom.googleapis.com/hostmetrics"
   debug:
     verbosity: detailed
+  http:
+    endpoint: http://post-flask-app:5001/v1/metrics
+    #encoding: json
 
 service:
   #extensions: [file_storage]
@@ -108,7 +111,7 @@ service:
     metrics:
       receivers: [prometheus,hostmetrics]
       processors: [resource,transform/remove_scope, transform/remove_attrs,batch]
-      exporters: [prometheusremotewrite]
+      exporters: [http]
     #logs:
     #  receivers: [otlp]
     #  processors: [memory_limiter,batch]

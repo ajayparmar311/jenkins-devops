@@ -1,35 +1,35 @@
 services:
-  prometheus:
-    image: prom/prometheus
-    container_name: prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-    ports:
-      - 9090:9090
-    networks:
-      - monitoring
-    restart: unless-stopped
-    volumes:
-      - ./prometheus:/etc/prometheus
-      - D:\\scripts\\shellScripts\\my-kube-project-429018-47e6566c031a.json:/etc/prometheus/gmp-sa-key.json
-      - prom_data:/prometheus
+  #prometheus:
+  #  image: prom/prometheus
+  #  container_name: prometheus
+  #  command:
+  #    - '--config.file=/etc/prometheus/prometheus.yml'
+  #  ports:
+  #    - 9090:9090
+  #  networks:
+  #    - monitoring
+  #  restart: unless-stopped
+  #  volumes:
+  #    - ./prometheus:/etc/prometheus
+  #    - ./secrets_and-keys/my-kube-project-429018-47e6566c031a.json:/etc/prometheus/gmp-sa-key.json
+  #    - prom_data:/prometheus
   
   # Google Cloud Ops Agent (for pushing to GMP)
-  gmp-agent:
-    image: gcr.io/google-containers/prometheus-to-sd:latest
-    container_name: gmp-agent
-    restart: unless-stopped
-    environment:
-      - GCP_REGION=your-region
-      - GCP_PROJECT=your-project-id
-      - POD_NAMESPACE=default
-      - PROMETHEUS_SOURCE=http://prometheus:9090/metrics
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - prometheus
-    networks:
-      - monitoring
+  #gmp-agent:
+  #  image: gcr.io/google-containers/prometheus-to-sd:latest
+  #  container_name: gmp-agent
+  #  restart: unless-stopped
+  #  environment:
+  #    - GCP_REGION=your-region
+  #    - GCP_PROJECT=your-project-id
+  #    - POD_NAMESPACE=default
+  #    - PROMETHEUS_SOURCE=http://prometheus:9090/metrics
+  #  volumes:
+  #    - /var/run/docker.sock:/var/run/docker.sock
+  #  depends_on:
+  #    - prometheus
+  #   networks:
+  #    - monitoring
 
   # for long term prometheus databasck
   # victoria-metrics:
@@ -40,19 +40,19 @@ services:
   #   restart: unless-stopped
   #   networks:
   #     - monitoring
-  grafana:
-    image: grafana/grafana
-    container_name: grafana
-    networks:
-      - monitoring
-    ports:
-      - 3000:3000
-    restart: unless-stopped
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=grafana
-    volumes:
-      - ./grafana:/etc/grafana/provisioning/datasources
+  #grafana:
+  #  image: grafana/grafana
+  #  container_name: grafana
+  #  networks:
+  #    - monitoring
+  #  ports:
+  #    - 3000:3000
+  #  restart: unless-stopped
+  #  environment:
+  #    - GF_SECURITY_ADMIN_USER=admin
+  #    - GF_SECURITY_ADMIN_PASSWORD=grafana
+  #  volumes:
+  #    - ./grafana:/etc/grafana/provisioning/datasources
   #alertmanager:
   #  image: prom/alertmanager
   #  container_name: alertmanager
@@ -158,46 +158,46 @@ services:
     restart: unless-stopped
     networks:
       - monitoring
-  # otel-collector:
-  #   image: otel/opentelemetry-collector-contrib:0.128.0
-  #   container_name: otel-collector
-  #   volumes:
-  #     - ./otel/python-app-otlp/collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
-  #     - ./otel/python-app-otlp/logs:/logs  # Mount logs to Collector
-  #     - /:/hostfs:ro         # Read-only access to host filesystem
-  #     - /proc:/hostfs/proc:ro
-  #     - /sys:/hostfs/sys:ro
-  #     - /etc:/hostfs/etc:ro
-  #     - ./otel/python-app-otlp/otel_storage:/otel_storage
-  #     - ./secrets_and-keys/my-kube-project-429018-47e6566c031a.json:/etc/otelcol-contrib/key.json
-  #   environment:
-  #     GOOGLE_APPLICATION_CREDENTIALS: /etc/otelcol-contrib/key.json
-  #   #network_mode: "host"      # So it can access host network interfaces
-  #   privileged: true          # Required for some Linux host metrics
-  #   command: --config=/etc/otel-collector-config.yaml
-  #   ports:
-  #     - "4318:4318"  # OTLP HTTP (optional)
-  #     - "8888:8888"  # metrics
-  #     - "4317:4317"
-  #     - "55681:55681"
-  #     - "13133:13133" # health check
-  #   restart: unless-stopped
-  #   # depends_on:
-  #   #   - loki
-  #     #- rabbitmq
-  #   networks:
-  #     - monitoring
-  #rabbitmq:
-  #  image: rabbitmq:4-management
-  #  container_name: rabbitmq
+  #otel-collector:
+  #  image: otel/opentelemetry-collector-contrib:0.128.0
+  #  container_name: otel-collector
+  #  volumes:
+  #    - ./otel/python-app-otlp/collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+  #    - ./otel/python-app-otlp/logs:/logs  # Mount logs to Collector
+  #    - /:/hostfs:ro         # Read-only access to host filesystem
+  #    - /proc:/hostfs/proc:ro
+  #    - /sys:/hostfs/sys:ro
+  #    - /etc:/hostfs/etc:ro
+  #    - ./otel/python-app-otlp/otel_storage:/otel_storage
+  #    - ./secrets_and-keys/my-kube-project-429018-47e6566c031a.json:/etc/otelcol-contrib/key.json
+  #  environment:
+  #    GOOGLE_APPLICATION_CREDENTIALS: /etc/otelcol-contrib/key.json
+  #  #network_mode: "host"      # So it can access host network interfaces
+  #  privileged: true          # Required for some Linux host metrics
+  #  command: --config=/etc/otel-collector-config.yaml
   #  ports:
-  #    - "5672:5672"  # AMQP port
-  #    - "15672:15672"  # Management UI port
-  #  tty: true
-  #  stdin_open: true
+  #    - "4318:4318"  # OTLP HTTP (optional)
+  #    - "8888:8888"  # metrics
+  #    - "4317:4317"
+  #    - "55681:55681"
+  #    - "13133:13133" # health check
   #  restart: unless-stopped
+  #  # depends_on:
+  #  #   - loki
+  #    #- rabbitmq
   #  networks:
-  #    - monitoring 
+  #    - monitoring
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"  # AMQP port
+      - "15672:15672"  # Management UI port
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
+    networks:
+      - monitoring 
   #flask-app:
   #  build:
   #    context: ./otel/python-app-otlp/app-flask
@@ -210,6 +210,20 @@ services:
   #  restart: unless-stopped
   #  networks:
   #    - monitoring
+  post-flask-app:
+    build:
+      context: ./otel/python-app-otlp/post-accept-app
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    volumes:
+      - ./otel/python-app-otlp/post-accept-app:/app
+    restart: unless-stopped
+    networks:
+      - monitoring
 
 volumes:
   prom_data:

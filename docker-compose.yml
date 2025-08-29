@@ -3,7 +3,7 @@ version: '3.8'
 services:
  
   jenkins-blueocean:
-    image: myjenkins-blueocean:v5
+    image: jenkins/jenkins:2.516.2-lts-jdk21
     container_name: jenkins-blueocean
     restart: on-failure
     volumes:
@@ -26,16 +26,16 @@ services:
     ports:
       - "8081:8081"
 
-  ansible-controller:
-    image: ansible-controller:v2
-    container_name: ansible-controller
-    privileged: true
-    networks:
-      - jenkins
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    tty: true
-    stdin_open: true
+  #ansible-controller:
+  #  image: ansible-controller:v2
+  #  container_name: ansible-controller
+  #  privileged: true
+  #  networks:
+  #    - jenkins
+  #  volumes:
+  #    - /var/run/docker.sock:/var/run/docker.sock
+  #  tty: true
+  #  stdin_open: true
   
   postgres:
     image: postgres:16
@@ -76,19 +76,19 @@ services:
         hard: 131072
       nproc: 8192
   
-  node-sonar-agent:
-    image: jenkins-agent-node-sonar:v1
-    container_name: node-sonar-agent
-    restart: unless-stopped
-    networks:
-      - jenkins
-    environment:
-      - JENKINS_URL=http://jenkins-blueocean:8080
-      - JENKINS_AGENT_NAME=node-sonar-agent
-      - JENKINS_SECRET=f5d0186722523a887d682de007dab7f7ffc354f3a3dab5c1f309988eb62d0935
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - jenkins-agent:/home/jenkins
+  #node-sonar-agent:
+  #  image: jenkins-agent-node-sonar:v1
+  #  container_name: node-sonar-agent
+  #  restart: unless-stopped
+  #  networks:
+  #    - jenkins
+  #  environment:
+  #    - JENKINS_URL=http://jenkins-blueocean:8080
+  #    - JENKINS_AGENT_NAME=node-sonar-agent
+  #    - JENKINS_SECRET=f5d0186722523a887d682de007dab7f7ffc354f3a3dab5c1f309988eb62d0935
+  #  volumes:
+  #    - /var/run/docker.sock:/var/run/docker.sock
+  #    - jenkins-agent:/home/jenkins
 
 volumes:
   jenkins-data:
