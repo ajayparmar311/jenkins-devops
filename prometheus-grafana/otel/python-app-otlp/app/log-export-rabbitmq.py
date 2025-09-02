@@ -15,6 +15,7 @@ RABBITMQ_HOST = "rabbitmq"
 RABBITMQ_PORT = 5672
 QUEUE_NAME = "logs_queue"
 DOWNSTREAM_URL = "http://192.168.1.9:5001/v1/metrics"
+store_id = "5555"
 
 # =========================
 # LOGGING SETUP
@@ -89,19 +90,21 @@ async def log_message(request: Request):
     try:
         """Publish incoming JSON to RabbitMQ"""
         data = await request.json()
-        if not log_data.timestamp:
-            data.timestamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+        
+        timestamp = data.get("timestamp") or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
-        # Build enriched payload for RabbitMQ
+        # Build enriched payload
         payload = {
-            "store_id": "store_123",   # static or dynamic if needed
-            "timestamp": data.timestamp,
-            "app_info": data.app_info,
-            "message_id": data.message_id,
-            "event": data.event,
-            "event_value": data.event_value,
-            "insert_id": f"unique_message_id_{int(time.time())}"  # you can also pass externally
+            "store_id": "store_123",
+            "timestamp": timestamp,
+            "app_info": data.get("app_info"),
+            "message_id": data.get("message_id"),
+            "event": data.get("event"),
+            "event_value": data.get("event_value"),
+            "insert_id": f"unique_message_id_{store_id}_{int(time.time())}"
         }
+
+
         connection, channel = get_rabbitmq_channel()
         channel.basic_publish(
             exchange="",
