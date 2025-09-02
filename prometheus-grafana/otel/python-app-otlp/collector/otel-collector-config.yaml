@@ -85,7 +85,7 @@ exporters:
           password: "guest"
     routing:
       exchange: ""           # default exchange
-      routing_key: "logs_queue"
+      routing_key: "otel-metrics"
     durable: true
     encoding_extension: otlp_encoding/rabbitmq
 
