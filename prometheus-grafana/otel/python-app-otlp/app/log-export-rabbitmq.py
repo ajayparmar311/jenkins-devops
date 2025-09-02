@@ -14,7 +14,7 @@ import uvicorn
 RABBITMQ_HOST = "rabbitmq"
 RABBITMQ_PORT = 5672
 QUEUE_NAME = "logs_queue"
-DOWNSTREAM_URL = "http://192.168.1.9:5001/v1/metrics"
+DOWNSTREAM_URL = "http://post-flask-app:5001/v1/metrics"
 store_id = "5555"
 
 # =========================

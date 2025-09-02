@@ -6,14 +6,10 @@ receivers:
       grpc:
         endpoint: 0.0.0.0:4317
   hostmetrics:
-    collection_interval: 60s
+    collection_interval: 30s
     root_path: /hostfs
     scrapers:
       cpu: {}
-      memory: {}
-      disk: {}
-      load: {}
-      filesystem: {}
   prometheus:
     config:
       scrape_configs:
@@ -80,11 +76,17 @@ processors:
 exporters:
   rabbitmq:
     connection:
-      endpoint: amqp://rabbitmq:5672
+      endpoint: "amqp://rabbitmq:5672"
+      # Optionally, specify vhost and TLS
+      # vhost: "/"
       auth:
         plain:
-          username: guest
-          password: guest
+          username: "guest"
+          password: "guest"
+    routing:
+      exchange: ""           # default exchange
+      routing_key: "logs_queue"
+    durable: true
     encoding_extension: otlp_encoding/rabbitmq
 
   loki:
@@ -110,12 +112,9 @@ exporters:
       prefix: "custom.googleapis.com/hostmetrics"
   debug:
     verbosity: detailed
-  http:
-    endpoint: http://post-flask-app:5001/v1/metrics
-    #encoding: json
 
 service:
-  #extensions: [file_storage]
+  extensions: [otlp_encoding/rabbitmq]
   pipelines:
     metrics:
       receivers: [hostmetrics]
