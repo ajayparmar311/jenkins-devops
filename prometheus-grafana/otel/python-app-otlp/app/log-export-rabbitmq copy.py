@@ -14,7 +14,8 @@ import uvicorn
 RABBITMQ_HOST = "rabbitmq"
 RABBITMQ_PORT = 5672
 QUEUE_NAME = "logs_queue"
-DOWNSTREAM_URL = "http://192.168.1.9:5001/v1/metrics"
+DOWNSTREAM_URL = "http://post-flask-app:5001/v1/metrics"
+store_id = "5555"
 
 # =========================
 # LOGGING SETUP
@@ -30,69 +31,51 @@ logging.basicConfig(
 app = FastAPI()
 
 
+# --- RabbitMQ Connection ---
+def get_connection():
+    while True:
+        try:
+            connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
+            channel = connection.channel()
+            channel.queue_declare(queue=QUEUE_NAME, durable=True)
+            return connection, channel
+        except Exception as e:
+            logging.error(f"Failed to connect to RabbitMQ: {e}, retrying in 5s...")
+            time.sleep(5)
+
+
 def get_rabbitmq_channel():
-    """Create a RabbitMQ connection + channel"""
-    connection = pika.BlockingConnection(
-        pika.ConnectionParameters(host=RABBITMQ_HOST, port=RABBITMQ_PORT)
-    )
-    channel = connection.channel()
-    channel.queue_declare(queue=QUEUE_NAME, durable=True)
+    """Helper to quickly open connection+channel for publishing"""
+    connection, channel = get_connection()
     return connection, channel
 
 
-@app.post("/log")
-async def log_message(request: Request):
-    """Publish incoming JSON to RabbitMQ"""
-    data = await request.json()
-    connection, channel = get_rabbitmq_channel()
-    channel.basic_publish(
-        exchange="",
-        routing_key=QUEUE_NAME,
-        body=json.dumps(data),
-        properties=pika.BasicProperties(delivery_mode=2)  # persistent
-    )
-    logging.info(f"📤 Published to RabbitMQ: {data}")
-    connection.close()
-    return {"status": "Message sent to RabbitMQ", "data": data}
-
-
-# =========================
-# RABBITMQ CONSUMER
-# =========================
-def callback(ch, method, properties, body):
-    """Consume messages and forward downstream"""
-    try:
-        message = json.loads(body.decode())
-        logging.info(f"📥 Consumed from RabbitMQ: {message}")
-
-        # Try sending downstream
-        resp = requests.post(DOWNSTREAM_URL, json=message, timeout=5)
-
-        if resp.status_code == 200:
-            logging.info(f"✅ Forwarded to {DOWNSTREAM_URL} successfully")
-            ch.basic_ack(delivery_tag=method.delivery_tag)  # Ack only on success
-        else:
-            logging.error(f"❌ Downstream returned {resp.status_code}, retry later")
-            # No ack → stays in queue
-    except requests.exceptions.RequestException as e:
-        logging.error(f"🌐 Network/Downstream error: {e}, will retry later")
-        # No ack → stays in queue
-    except Exception as e:
-        logging.error(f"🔥 Unexpected error: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-
-
-def start_consumer():
-    """Keep consumer alive, retry if RabbitMQ/connection fails"""
+# --- Downstream Sender ---
+def send_downstream(body):
     while True:
         try:
-            connection = pika.BlockingConnection(
-                pika.ConnectionParameters(host=RABBITMQ_HOST, port=RABBITMQ_PORT)
-            )
-            channel = connection.channel()
-            channel.queue_declare(queue=QUEUE_NAME, durable=True)
+            res = requests.post(DOWNSTREAM_URL, json=json.loads(body), timeout=5)
+            res.raise_for_status()
+            logging.info(f"✅ Sent to downstream: {body}")
+            return True
+        except Exception as e:
+            logging.error(f"🌐 Downstream error: {e}, retrying in 5s...")
+            time.sleep(5)  # retry forever until success
 
-            channel.basic_qos(prefetch_count=1)
+
+# --- Consumer Callback ---
+def callback(ch, method, properties, body):
+    logging.info(f"📥 Got message: {body}")
+    if send_downstream(body):  # retry until success
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
+
+# --- Consumer Worker ---
+def start_consumer():
+    while True:
+        try:
+            connection, channel = get_connection()
+            channel.basic_qos(prefetch_count=1)  # Fair dispatch
             channel.basic_consume(queue=QUEUE_NAME, on_message_callback=callback)
 
             logging.info("🚀 RabbitMQ consumer started. Waiting for messages...")
@@ -102,9 +85,47 @@ def start_consumer():
             time.sleep(5)
 
 
+@app.post("/log")
+async def log_message(request: Request):
+    try:
+        """Publish incoming JSON to RabbitMQ"""
+        data = await request.json()
+        
+        timestamp = data.get("timestamp") or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+        # Build enriched payload
+        payload = {
+            "store_id": "store_123",
+            "timestamp": timestamp,
+            "app_info": data.get("app_info"),
+            "message_id": data.get("message_id"),
+            "event": data.get("event"),
+            "event_value": data.get("event_value"),
+            "insert_id": f"unique_message_id_{store_id}_{int(time.time())}"
+        }
+
+
+        connection, channel = get_rabbitmq_channel()
+        channel.basic_publish(
+            exchange="",
+            routing_key=QUEUE_NAME,
+            body=json.dumps(payload),
+            properties=pika.BasicProperties(delivery_mode=2)  # persistent
+        )
+        logging.info(f"📤 Published to RabbitMQ: {data}")
+        connection.close()
+        return {"status": "Message sent to RabbitMQ", "data": data}
+    except Exception as e:
+        logging.error(f"Error processing log: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================
+# FASTAPI STARTUP EVENT
+# =========================
 @app.on_event("startup")
 def startup_event():
-    logging.info("⚡ FastAPI startup event triggered, launching consumer thread...")
+    logging.info("⚡ Launching RabbitMQ consumer in background thread...")
     consumer_thread = threading.Thread(target=start_consumer, daemon=True)
     consumer_thread.start()
 
