@@ -53,34 +53,50 @@ def get_rabbitmq_channel():
 
 
 # --- Metric Transformer ---
-def transform_metric(raw_body: bytes) -> dict:
+def transform_metric(raw_body: bytes) -> list[dict]:
     """
-    Convert OTLP-like payload into BigQuery-friendly JSON.
-    Here I assume Collector sends JSON. If Protobuf → you need a parser.
+    Convert OTLP metrics payload into flat JSON rows (BigQuery-friendly).
     """
     try:
         msg = json.loads(raw_body)
-    except Exception:
-        logging.error("⚠️ Could not parse metric body as JSON")
+    except Exception as e:
+        logging.error(f"⚠️ Could not parse metric body as JSON: {e}")
         return None
 
-    # Example transformation → flatten into schema
     transformed = []
-    resource_attrs = msg.get("resource", {}).get("attributes", {})
 
-    for scope_metric in msg.get("scopeMetrics", []):
-        for metric in scope_metric.get("metrics", []):
-            name = metric.get("name")
-            for dp in metric.get("dataPoints", []):
-                row = {
-                    "store_id": store_id,
-                    "metric_name": name,
-                    "timestamp": dp.get("timeUnixNano"),
-                    "value": dp.get("asDouble") or dp.get("asInt"),
-                    "attributes": json.dumps(dp.get("attributes", {})),
-                    "resource": json.dumps(resource_attrs)
-                }
-                transformed.append(row)
+    # OTLP metrics are nested under resourceMetrics
+    for rm in msg.get("resourceMetrics", []):
+        resource_attrs = rm.get("resource", {}).get("attributes", [])
+
+        # flatten resource attrs
+        resource_attrs_dict = {
+            a["key"]: list(a["value"].values())[0] for a in resource_attrs
+        }
+
+        for sm in rm.get("scopeMetrics", []):
+            for metric in sm.get("metrics", []):
+                metric_name = metric.get("name")
+
+                # Handle SUM metrics
+                if "sum" in metric:
+                    for dp in metric["sum"].get("dataPoints", []):
+                        dp_attrs = {
+                            a["key"]: list(a["value"].values())[0]
+                            for a in dp.get("attributes", [])
+                        }
+
+                        row = {
+                            "store_id": store_id,
+                            "metric_name": metric_name,
+                            "timestamp": dp.get("timeUnixNano"),
+                            "value": dp.get("asDouble") or dp.get("asInt"),
+                            "attributes": json.dumps(dp_attrs),
+                            "resource": json.dumps(resource_attrs_dict),
+                        }
+                        transformed.append(row)
+
+                # TODO: also handle "gauge", "histogram" etc. if needed
 
     return transformed
 
@@ -114,6 +130,8 @@ def callback(ch, method, properties, body, queue_type="logs"):
 
     if ok:
         ch.basic_ack(delivery_tag=method.delivery_tag)
+    else:
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 
 # --- Consumer Worker ---
