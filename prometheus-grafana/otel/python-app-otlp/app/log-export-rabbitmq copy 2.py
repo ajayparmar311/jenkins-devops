@@ -84,37 +84,24 @@ def start_consumer():
             time.sleep(5)
 
 
+# =========================
+# FASTAPI ROUTES
+# =========================
 @app.post("/log")
 async def log_message(request: Request):
-    try:
-        """Publish incoming JSON to RabbitMQ"""
-        data = await request.json()
-        if not log_data.timestamp:
-            data.timestamp = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
-        # Build enriched payload for RabbitMQ
-        payload = {
-            "store_id": "store_123",   # static or dynamic if needed
-            "timestamp": data.timestamp,
-            "app_info": data.app_info,
-            "message_id": data.message_id,
-            "event": data.event,
-            "event_value": data.event_value,
-            "insert_id": f"unique_message_id_{int(time.time())}"  # you can also pass externally
-        }
-        connection, channel = get_rabbitmq_channel()
-        channel.basic_publish(
-            exchange="",
-            routing_key=QUEUE_NAME,
-            body=json.dumps(payload),
-            properties=pika.BasicProperties(delivery_mode=2)  # persistent
-        )
-        logging.info(f"📤 Published to RabbitMQ: {data}")
-        connection.close()
-        return {"status": "Message sent to RabbitMQ", "data": data}
-    except Exception as e:
-        logging.error(f"Error processing log: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """Publish incoming JSON to RabbitMQ"""
+    data = await request.json()
+    connection, channel = get_rabbitmq_channel()
+    channel.basic_publish(
+        exchange="",
+        routing_key=QUEUE_NAME,
+        body=json.dumps(data),
+        properties=pika.BasicProperties(delivery_mode=2)  # persistent
+    )
+    logging.info(f"📤 Published to RabbitMQ: {data}")
+    connection.close()
+    return {"status": "Message sent to RabbitMQ", "data": data}
 
 
 # =========================
