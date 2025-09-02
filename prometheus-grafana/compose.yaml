@@ -158,35 +158,34 @@ services:
     restart: unless-stopped
     networks:
       - monitoring
-  #otel-collector:
-  #  image: otel/opentelemetry-collector-contrib:0.128.0
-  #  container_name: otel-collector
-  #  volumes:
-  #    - ./otel/python-app-otlp/collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
-  #    - ./otel/python-app-otlp/logs:/logs  # Mount logs to Collector
-  #    - /:/hostfs:ro         # Read-only access to host filesystem
-  #    - /proc:/hostfs/proc:ro
-  #    - /sys:/hostfs/sys:ro
-  #    - /etc:/hostfs/etc:ro
-  #    - ./otel/python-app-otlp/otel_storage:/otel_storage
-  #    - ./secrets_and-keys/my-kube-project-429018-47e6566c031a.json:/etc/otelcol-contrib/key.json
-  #  environment:
-  #    GOOGLE_APPLICATION_CREDENTIALS: /etc/otelcol-contrib/key.json
-  #  #network_mode: "host"      # So it can access host network interfaces
-  #  privileged: true          # Required for some Linux host metrics
-  #  command: --config=/etc/otel-collector-config.yaml
-  #  ports:
-  #    - "4318:4318"  # OTLP HTTP (optional)
-  #    - "8888:8888"  # metrics
-  #    - "4317:4317"
-  #    - "55681:55681"
-  #    - "13133:13133" # health check
-  #  restart: unless-stopped
-  #  # depends_on:
-  #  #   - loki
-  #    #- rabbitmq
-  #  networks:
-  #    - monitoring
+  otel-collector:
+   image: otel/opentelemetry-collector-contrib:0.128.0
+   container_name: otel-collector
+   volumes:
+     - ./otel/python-app-otlp/collector/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+     - ./otel/python-app-otlp/logs:/logs  # Mount logs to Collector
+     - /:/hostfs:ro         # Read-only access to host filesystem
+     - /proc:/hostfs/proc:ro
+     - /sys:/hostfs/sys:ro
+     - /etc:/hostfs/etc:ro
+     - ./otel/python-app-otlp/otel_storage:/otel_storage
+     - ./secrets_and-keys/my-kube-project-429018-47e6566c031a.json:/etc/otelcol-contrib/key.json
+   environment:
+     GOOGLE_APPLICATION_CREDENTIALS: /etc/otelcol-contrib/key.json
+   #network_mode: "host"      # So it can access host network interfaces
+   privileged: true          # Required for some Linux host metrics
+   command: --config=/etc/otel-collector-config.yaml
+   ports:
+     - "4318:4318"  # OTLP HTTP (optional)
+     - "8888:8888"  # metrics
+     - "4317:4317"
+     - "55681:55681"
+     - "13133:13133" # health check
+   restart: unless-stopped
+   depends_on:
+     - rabbitmq
+   networks:
+     - monitoring
   rabbitmq:
     image: rabbitmq:4-management
     container_name: rabbitmq

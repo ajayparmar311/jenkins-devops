@@ -78,6 +78,15 @@ processors:
 
 
 exporters:
+  rabbitmq:
+    connection:
+      endpoint: amqp://rabbitmq:5672
+      auth:
+        plain:
+          username: guest
+          password: guest
+    encoding_extension: otlp_encoding/rabbitmq
+
   loki:
     endpoint: "http://prometheus-grafana-loki-1:3100/loki/api/v1/push"  # Replace with your Loki URL
     default_labels_enabled:
@@ -109,9 +118,9 @@ service:
   #extensions: [file_storage]
   pipelines:
     metrics:
-      receivers: [prometheus,hostmetrics]
+      receivers: [hostmetrics]
       processors: [resource,transform/remove_scope, transform/remove_attrs,batch]
-      exporters: [http]
+      exporters: [rabbitmq]
     #logs:
     #  receivers: [otlp]
     #  processors: [memory_limiter,batch]
@@ -123,3 +132,8 @@ extensions:
   file_storage:
     directory: ./otel_storage
     create_directory: true
+  otlp_encoding/rabbitmq:
+    protocol: otlp_json 
+
+
+
