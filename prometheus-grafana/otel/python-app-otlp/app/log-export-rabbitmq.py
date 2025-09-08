@@ -110,6 +110,7 @@ def transform_metric(raw_body: bytes) -> list[dict]:
 def send_downstream(body, is_metric=False):
     if is_metric:
         payload = transform_metric(body)
+        logging.info(f"📥 Got Transform data : {payload[:200]}...")
         if not payload:
             return False
     else:
