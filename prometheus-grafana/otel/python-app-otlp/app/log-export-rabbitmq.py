@@ -190,7 +190,7 @@ def record_metrics(message: dict):
     if message.get("message_id") in 'LOG_ERROR':
       match = re.search(r":\s*(\d+)", message.get("event_value"))
       extracted_number = match.group(1) if match else None
-      logging.info(f"message contain: {message.get("message_id")} : CAM_ID : {extracted_number}")
+      #logging.info(f"message contain: {message.get("message_id")} : CAM_ID : {extracted_number}")
       
       EVENT_COUNTER.labels(
           **labels,
