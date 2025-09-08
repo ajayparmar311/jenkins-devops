@@ -9,7 +9,28 @@ receivers:
     collection_interval: 30s
     root_path: /hostfs
     scrapers:
-      cpu: {}
+      cpu:
+        metrics:
+          system.cpu.logical.count:
+            enabled: true
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+          system.memory.limit:
+            enabled: true
+      load:
+        metrics:
+          system.cpu.load_average.15m:
+            enabled: false
+          system.cpu.load_average.5m:
+            enabled: false
+      filesystem:
+        metrics:
+          system.filesystem.utilization:
+            enabled: true
+          system.filesystem.inodes.usage:
+            enabled: false
   prometheus:
     config:
       scrape_configs:
