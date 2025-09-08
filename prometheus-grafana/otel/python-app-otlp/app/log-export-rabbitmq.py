@@ -8,6 +8,11 @@ import requests
 from fastapi import FastAPI, Request, HTTPException
 import uvicorn
 
+from prometheus_client import Counter, Histogram, Gauge, generate_latest
+from pydantic import BaseModel
+import re
+from typing import Optional
+
 # =========================
 # CONFIG
 # =========================
@@ -157,12 +162,50 @@ def start_consumer(queue_name, queue_type="logs"):
             logging.error(f"❌ Consumer for {queue_type} crashed: {e}, retrying in 5s...")
             time.sleep(5)
 
+class LogData(BaseModel):
+    app_info: str
+    message_id: str
+    event: str
+    event_value: str
+    timestamp: Optional[str] = None
+    duration_ms: Optional[int] = None
+    user_id: Optional[str] = None
+
+
+EVENT_COUNTER = Counter(
+    'app_events_total',
+    'Total count of application events by type and value',
+    ['app_name', 'store', 'filter_type', 'error_type','cam_id']
+)
+
+def record_metrics(log_data: LogData):
+    """Extract and record metrics from log data"""
+    labels = {
+        'app_name': log_data.app_info,
+        'store' : '1111',
+    }
+    
+    # Count all events
+    if log_data.message_id in 'LOG_ERROR':
+      match = re.search(r":\s*(\d+)", log_data.event_value)
+      extracted_number = match.group(1) if match else None
+      logging.info(f"message contain: {log_data.message_id} : CAM_ID : {extracted_number}")
+      
+      EVENT_COUNTER.labels(
+          **labels,
+          filter_type=log_data.message_id,
+          error_type=log_data.event,
+          cam_id=extracted_number
+      ).inc()
+
 
 @app.post("/log")
 async def log_message(request: Request):
     try:
         """Publish incoming JSON to RabbitMQ"""
         data = await request.json()
+
+        record_metrics(request)
 
         timestamp = data.get("timestamp") or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
@@ -193,6 +236,18 @@ async def log_message(request: Request):
 
 
 # =========================
+# expose health metric endpoint for prometheus metric data
+# =========================
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return Response(
+        content=generate_latest(),
+        media_type="text/plain"
+    )
+
+
+# =========================
 # FASTAPI STARTUP EVENT
 # =========================
 @app.on_event("startup")
@@ -200,6 +255,8 @@ def startup_event():
     logging.info("⚡ Launching RabbitMQ consumers in background threads...")
     threading.Thread(target=start_consumer, args=(LOG_QUEUE, "logs"), daemon=True).start()
     threading.Thread(target=start_consumer, args=(METRIC_QUEUE, "metrics"), daemon=True).start()
+
+
 
 
 # =========================
