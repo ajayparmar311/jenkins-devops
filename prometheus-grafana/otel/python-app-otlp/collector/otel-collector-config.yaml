@@ -43,16 +43,41 @@ receivers:
 
 processors:
   batch: {}
-    #timeout: 10s
-    #send_batch_size: 1000
+    timeout: 10s
+    send_batch_size: 1000
+    send_batch_max_size: 1024
   resourcedetection:
     detectors: [env, system] # Adds host metadata
+
+  filter/drop_scrape_metrics:
+    metrics:
+      exclude:
+        match_type: strict
+        metric_names:
+          - scrape_duration_seconds
+          - scrape_samples_scraped
+          - scrape_samples_post_metric_relabeling
+          - scrape_series_added
+          - python_gc_objects_collected_total
+          - python_gc_objects_uncollectable_total
+          - python_gc_collections_total
+          - python_info
+          - process_virtual_memory_bytes
+          - process_resident_memory_bytes
+          - process_start_time_seconds
+          - process_cpu_seconds_total
+          - process_open_fds
+          - process_max_fds
+          - python.*
+          - python*
+
+
   # Add required resource attributes for GMP
   resource:
     attributes:
-      - key: service.name
-        value: "hostmetrics-vm" # Unique identifier for your VM
-        action: insert
+      # - key: service.name
+      #   value: "hostmetrics-vm" # Unique identifier for your VM
+      #   action: insert
       - key: gcp.resource_type
         value: "prometheus_target" # Required for GMP ingestion
         action: insert
@@ -139,7 +164,11 @@ service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [resource,transform/remove_scope, transform/remove_attrs,batch]
+      processors: [transform/remove_scope, transform/remove_attrs,batch]
+      exporters: [rabbitmq]
+    metrics/custom:
+      receivers: [prometheus]
+      processors: [filter/drop_scrape_metrics,transform/remove_scope, transform/remove_attrs,batch]
       exporters: [rabbitmq]
     #logs:
     #  receivers: [otlp]
