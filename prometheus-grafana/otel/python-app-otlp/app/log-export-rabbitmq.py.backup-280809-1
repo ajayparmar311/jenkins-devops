@@ -31,6 +31,63 @@ logging.basicConfig(
 # =========================
 app = FastAPI()
 
+# ---------- Helpers ----------
+def safe_json_str(val) -> str:
+    """Return a JSON string regardless of input type (dict/str/bytes/None)."""
+    try:
+        if isinstance(val, bytes):
+            val = val.decode("utf-8", errors="replace")
+        if isinstance(val, dict):
+            return json.dumps(val, ensure_ascii=False)
+        if isinstance(val, str):
+            # verify it is valid JSON; if not, wrap it
+            try:
+                json.loads(val)
+                return val
+            except Exception:
+                return json.dumps({"value": val}, ensure_ascii=False)
+        if val is None:
+            return "{}"
+        # fallback: stringify
+        return json.dumps(val, ensure_ascii=False)
+    except Exception:
+        return "{}"
+
+def decode_body_to_obj(body):
+    """Decode bytes -> JSON obj; pass through dict/list."""
+    if isinstance(body, (dict, list)):
+        return body
+    if isinstance(body, bytes):
+        try:
+            return json.loads(body.decode("utf-8"))
+        except Exception as e:
+            logging.error(f"❌ Failed to decode JSON bytes: {e}")
+            return None
+    if isinstance(body, str):
+        try:
+            return json.loads(body)
+        except Exception as e:
+            logging.error(f"❌ Failed to decode JSON string: {e}")
+            return None
+    logging.error("❌ Unsupported body type for JSON decode")
+    return None
+
+def _attrs_list_to_dict(attrs_list):
+    """
+    OTLP attributes are like:
+      [{"key": "cpu", "value": {"stringValue": "cpu0"}}, ...]
+    This flattens to {"cpu": "cpu0", ...}
+    """
+    out = {}
+    for a in attrs_list or []:
+        k = a.get("key")
+        v = a.get("value", {})
+        if isinstance(v, dict) and v:
+            # take the first value in the oneof
+            out[k] = next(iter(v.values()))
+        else:
+            out[k] = v
+    return out
 
 # --- RabbitMQ Connection ---
 def get_connection():
@@ -45,81 +102,100 @@ def get_connection():
             logging.error(f"Failed to connect to RabbitMQ: {e}, retrying in 5s...")
             time.sleep(5)
 
-
 def get_rabbitmq_channel():
     """Helper to quickly open connection+channel for publishing"""
     connection, channel = get_connection()
     return connection, channel
 
-
 # --- Metric Transformer ---
-def transform_metric(raw_body: bytes) -> list[dict]:
+def transform_metric(raw_body) -> list[dict] | None:
     """
     Convert OTLP metrics payload into flat JSON rows (BigQuery-friendly).
+    Accepts bytes|str|dict.
     """
-    try:
-        msg = json.loads(raw_body)
-    except Exception as e:
-        logging.error(f"⚠️ Could not parse metric body as JSON: {e}")
+    msg = decode_body_to_obj(raw_body)
+    if msg is None:
+        logging.error("⚠️ Could not parse metric body as JSON")
         return None
 
     transformed = []
 
     # OTLP metrics are nested under resourceMetrics
     for rm in msg.get("resourceMetrics", []):
-        resource_attrs = rm.get("resource", {}).get("attributes", [])
-
-        # flatten resource attrs
-        resource_attrs_dict = {
-            a["key"]: list(a["value"].values())[0] for a in resource_attrs
-        }
+        resource_attrs = _attrs_list_to_dict(rm.get("resource", {}).get("attributes", []))
 
         for sm in rm.get("scopeMetrics", []):
             for metric in sm.get("metrics", []):
                 metric_name = metric.get("name")
 
-                # Handle SUM metrics
-                if "sum" in metric:
+                # SUM
+                if "sum" in metric and isinstance(metric["sum"], dict):
                     for dp in metric["sum"].get("dataPoints", []):
-                        dp_attrs = {
-                            a["key"]: list(a["value"].values())[0]
-                            for a in dp.get("attributes", [])
-                        }
-
+                        dp_attrs = _attrs_list_to_dict(dp.get("attributes", []))
                         row = {
                             "store_id": store_id,
                             "metric_name": metric_name,
                             "timestamp": dp.get("timeUnixNano"),
-                            "value": dp.get("asDouble") or dp.get("asInt"),
-                            "attributes": json.dumps(dp_attrs),
-                            "resource": json.dumps(resource_attrs_dict),
+                            "value": dp.get("asDouble") if dp.get("asDouble") is not None else dp.get("asInt"),
+                            "attributes": safe_json_str(dp_attrs),
+                            "resource": safe_json_str(resource_attrs),
                         }
                         transformed.append(row)
 
-                # TODO: also handle "gauge", "histogram" etc. if needed
+                # GAUGE (optional support)
+                if "gauge" in metric and isinstance(metric["gauge"], dict):
+                    for dp in metric["gauge"].get("dataPoints", []):
+                        dp_attrs = _attrs_list_to_dict(dp.get("attributes", []))
+                        row = {
+                            "store_id": store_id,
+                            "metric_name": metric_name,
+                            "timestamp": dp.get("timeUnixNano"),
+                            "value": dp.get("asDouble") if dp.get("asDouble") is not None else dp.get("asInt"),
+                            "attributes": safe_json_str(dp_attrs),
+                            "resource": safe_json_str(resource_attrs),
+                        }
+                        transformed.append(row)
+
+                # You can add histogram/exponentialHistogram here if needed.
 
     return transformed
 
-
 # --- Downstream Sender ---
+
 def send_downstream(body, is_metric=False):
+    """
+    POST to downstream. Metrics are transformed into list[dict].
+    Logs are normalized into dict/list JSON.
+    """
     if is_metric:
         payload = transform_metric(body)
         if not payload:
+            logging.error("❌ Metric transform produced no rows; dropping.")
             return False
     else:
-        # Decode bytes to string for non-metric messages
-        try:
-            payload = json.loads(body.decode('utf-8'))
-        except Exception as e:
-            logging.error(f"⚠️ Could not decode message body: {e}")
-            return False
+        obj = decode_body_to_obj(body)
+        if obj is None:
+            logging.error(f"❌ Log payload invalid JSON, repairing: {body[:200] if isinstance(body, (bytes,str)) else body}")
+            try:
+                import ast
+                obj = ast.literal_eval(body.decode("utf-8") if isinstance(body, bytes) else str(body))
+            except Exception as e:
+                logging.error(f"❌ Could not repair log body: {e}")
+                return False
+        payload = obj
+
+    # Ensure we always POST valid JSON
+    try:
+        payload_json = json.dumps(payload, ensure_ascii=False)
+    except Exception as e:
+        logging.error(f"❌ Payload not JSON serializable: {e}")
+        return False
 
     while True:
         try:
-            res = requests.post(DOWNSTREAM_URL, json=payload, timeout=5)
+            res = requests.post(DOWNSTREAM_URL, data=payload_json, headers={"Content-Type": "application/json"}, timeout=10)
             res.raise_for_status()
-            logging.info(f"✅ Sent to downstream: {payload}")
+            logging.info(f"✅ Sent to downstream ({'metrics' if is_metric else 'logs'}): {str(payload)[:300]}...")
             return True
         except Exception as e:
             logging.error(f"🌐 Downstream error: {e}, retrying in 5s...")
@@ -128,7 +204,9 @@ def send_downstream(body, is_metric=False):
 
 # --- Consumer Callback ---
 def callback(ch, method, properties, body, queue_type="logs"):
-    logging.info(f"📥 Got message from {queue_type}: {body[:200]}...")
+    # body is bytes from RabbitMQ
+    preview = body[:200].decode("utf-8", errors="replace") if isinstance(body, (bytes, bytearray)) else str(body)[:200]
+    logging.info(f"📥 Got message from {queue_type}: {preview}...")
     if queue_type == "metrics":
         ok = send_downstream(body, is_metric=True)
     else:
@@ -137,8 +215,8 @@ def callback(ch, method, properties, body, queue_type="logs"):
     if ok:
         ch.basic_ack(delivery_tag=method.delivery_tag)
     else:
+        # drop to DLQ or discard; set requeue=True if you want retries at RabbitMQ layer
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-
 
 # --- Consumer Worker ---
 def start_consumer(queue_name, queue_type="logs"):
@@ -157,7 +235,6 @@ def start_consumer(queue_name, queue_type="logs"):
             logging.error(f"❌ Consumer for {queue_type} crashed: {e}, retrying in 5s...")
             time.sleep(5)
 
-
 @app.post("/log")
 async def log_message(request: Request):
     try:
@@ -166,7 +243,7 @@ async def log_message(request: Request):
 
         timestamp = data.get("timestamp") or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
-        # Build enriched payload
+        # Build enriched payload (keep as dict; we json.dumps only when publishing)
         payload = {
             "store_id": "store_123",
             "timestamp": timestamp,
@@ -182,7 +259,7 @@ async def log_message(request: Request):
             exchange="",
             routing_key=LOG_QUEUE,
             body=json.dumps(payload),
-            properties=pika.BasicProperties(delivery_mode=2)
+            properties=pika.BasicProperties(delivery_mode=2)  # persistent
         )
         logging.info(f"📤 Published to RabbitMQ logs_queue: {payload}")
         connection.close()
@@ -190,7 +267,6 @@ async def log_message(request: Request):
     except Exception as e:
         logging.error(f"Error processing log: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # =========================
 # FASTAPI STARTUP EVENT
@@ -201,9 +277,9 @@ def startup_event():
     threading.Thread(target=start_consumer, args=(LOG_QUEUE, "logs"), daemon=True).start()
     threading.Thread(target=start_consumer, args=(METRIC_QUEUE, "metrics"), daemon=True).start()
 
-
 # =========================
 # MAIN ENTRYPOINT
 # =========================
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5000)
+
