@@ -134,7 +134,7 @@ def send_downstream(body, is_metric=False):
 
 # --- Consumer Callback ---
 def callback(ch, method, properties, body, queue_type="logs"):
-    logging.info(f"📥 Got message from {queue_type}: {body[:200]}...")
+    logging.info(f"📥 Got message from {queue_type}: {body}...")
     if queue_type == "metrics":
         ok = send_downstream(body, is_metric=True)
     else:
@@ -201,7 +201,7 @@ def record_metrics(log_data: LogData):
 
 
 @app.post("/log")
-async def log_message(request: Request):
+async def log_message(request: LogData):
     try:
         """Publish incoming JSON to RabbitMQ"""
         data = await request.json()
