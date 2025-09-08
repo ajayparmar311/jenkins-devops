@@ -5,7 +5,7 @@ import time
 
 import pika
 import requests
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException,Response
 import uvicorn
 
 from prometheus_client import Counter, Histogram, Gauge, generate_latest
