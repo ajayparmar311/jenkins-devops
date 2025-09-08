@@ -179,34 +179,34 @@ EVENT_COUNTER = Counter(
     ['app_name', 'store', 'filter_type', 'error_type','cam_id']
 )
 
-def record_metrics(log_data: LogData):
+def record_metrics(message: dict):
     """Extract and record metrics from log data"""
     labels = {
-        'app_name': log_data.app_info,
+        'app_name': message.get("app_info"),
         'store' : '1111',
     }
     
     # Count all events
-    if log_data.message_id in 'LOG_ERROR':
-      match = re.search(r":\s*(\d+)", log_data.event_value)
+    if message.get("message_id") in 'LOG_ERROR':
+      match = re.search(r":\s*(\d+)", message.get("event_value"))
       extracted_number = match.group(1) if match else None
-      logging.info(f"message contain: {log_data.message_id} : CAM_ID : {extracted_number}")
+      logging.info(f"message contain: {message.get("message_id")} : CAM_ID : {extracted_number}")
       
       EVENT_COUNTER.labels(
           **labels,
-          filter_type=log_data.message_id,
-          error_type=log_data.event,
+          filter_type=message.get("message_id"),
+          error_type=message.get("event"),
           cam_id=extracted_number
       ).inc()
 
 
 @app.post("/log")
-async def log_message(request: LogData):
+async def log_message(request: Request):
     try:
         """Publish incoming JSON to RabbitMQ"""
         data = await request.json()
 
-        record_metrics(request)
+        record_metrics(data)
 
         timestamp = data.get("timestamp") or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
