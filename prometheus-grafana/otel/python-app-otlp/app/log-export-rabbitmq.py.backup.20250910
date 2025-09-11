@@ -13,10 +13,6 @@ from pydantic import BaseModel
 import re
 from typing import Optional
 
-# --- GCP Pub/Sub ---
-from google.cloud import pubsub_v1
-import os
-
 # =========================
 # CONFIG
 # =========================
@@ -25,8 +21,6 @@ RABBITMQ_PORT = 5672
 LOG_QUEUE = "logs_queue"
 METRIC_QUEUE = "otel-metrics"
 DOWNSTREAM_URL = "http://post-flask-app:5001/v1/metrics"
-PROJECT_ID = os.getenv("GCP_PROJECT_ID", "my-kube-project-429018")
-PUBSUB_TOPIC = os.getenv("PUBSUB_TOPIC", "otel-metrics")
 store_id = "5555"
 
 # =========================
@@ -41,10 +35,6 @@ logging.basicConfig(
 # FASTAPI APP
 # =========================
 app = FastAPI()
-
-# --- Pub/Sub Publisher ---
-publisher = pubsub_v1.PublisherClient()
-topic_path = publisher.topic_path(PROJECT_ID, PUBSUB_TOPIC)
 
 
 # --- RabbitMQ Connection ---
@@ -116,30 +106,29 @@ def transform_metric(raw_body: bytes) -> list[dict]:
     return transformed
 
 
-# --- Downstream Sender (now Pub/Sub) ---
+# --- Downstream Sender ---
 def send_downstream(body, is_metric=False):
     if is_metric:
-        payloads = transform_metric(body)
-        if not payloads:
+        payload = transform_metric(body)
+        logging.info(f"📥 Got Transform data : {payload[:200]}...")
+        if not payload:
             return False
-        messages = [json.dumps(p).encode("utf-8") for p in payloads]
     else:
+        # Decode bytes to string for non-metric messages
         try:
-            payload = json.loads(body.decode("utf-8"))
-            messages = [json.dumps(payload).encode("utf-8")]
+            payload = json.loads(body.decode('utf-8'))
         except Exception as e:
             logging.error(f"⚠️ Could not decode message body: {e}")
             return False
 
     while True:
         try:
-            for msg in messages:
-                future = publisher.publish(topic_path, msg)
-                logging.info(f"✅ Published to Pub/Sub {PUBSUB_TOPIC}: {msg[:200]}...")
-                future.result()  # wait for publish
+            res = requests.post(DOWNSTREAM_URL, json=payload, timeout=5)
+            res.raise_for_status()
+            logging.info(f"✅ Sent to downstream: {payload}")
             return True
         except Exception as e:
-            logging.error(f"🌐 Pub/Sub error: {e}, retrying in 5s...")
+            logging.error(f"🌐 Downstream error: {e}, retrying in 5s...")
             time.sleep(5)
 
 
@@ -174,41 +163,41 @@ def start_consumer(queue_name, queue_type="logs"):
             logging.error(f"❌ Consumer for {queue_type} crashed: {e}, retrying in 5s...")
             time.sleep(5)
 
-# class LogData(BaseModel):
-#     app_info: str
-#     message_id: str
-#     event: str
-#     event_value: str
-#     timestamp: Optional[str] = None
-#     duration_ms: Optional[int] = None
-#     user_id: Optional[str] = None
+class LogData(BaseModel):
+    app_info: str
+    message_id: str
+    event: str
+    event_value: str
+    timestamp: Optional[str] = None
+    duration_ms: Optional[int] = None
+    user_id: Optional[str] = None
 
 
-# EVENT_COUNTER = Counter(
-#     'app_events_total',
-#     'Total count of application events by type and value',
-#     ['app_name', 'store', 'filter_type', 'error_type','cam_id']
-# )
+EVENT_COUNTER = Counter(
+    'app_events_total',
+    'Total count of application events by type and value',
+    ['app_name', 'store', 'filter_type', 'error_type','cam_id']
+)
 
-# def record_metrics(message: dict):
-#     """Extract and record metrics from log data"""
-#     labels = {
-#         'app_name': message.get("app_info"),
-#         'store' : '1111',
-#     }
+def record_metrics(message: dict):
+    """Extract and record metrics from log data"""
+    labels = {
+        'app_name': message.get("app_info"),
+        'store' : '1111',
+    }
     
-#     # Count all events
-#     if message.get("message_id") in 'LOG_ERROR':
-#       match = re.search(r":\s*(\d+)", message.get("event_value"))
-#       extracted_number = match.group(1) if match else None
-#       #logging.info(f"message contain: {message.get("message_id")} : CAM_ID : {extracted_number}")
+    # Count all events
+    if message.get("message_id") in 'LOG_ERROR':
+      match = re.search(r":\s*(\d+)", message.get("event_value"))
+      extracted_number = match.group(1) if match else None
+      #logging.info(f"message contain: {message.get("message_id")} : CAM_ID : {extracted_number}")
       
-#       EVENT_COUNTER.labels(
-#           **labels,
-#           filter_type=message.get("message_id"),
-#           error_type=message.get("event"),
-#           cam_id=extracted_number
-#       ).inc()
+      EVENT_COUNTER.labels(
+          **labels,
+          filter_type=message.get("message_id"),
+          error_type=message.get("event"),
+          cam_id=extracted_number
+      ).inc()
 
 
 @app.post("/log")
@@ -217,7 +206,7 @@ async def log_message(request: Request):
         """Publish incoming JSON to RabbitMQ"""
         data = await request.json()
 
-        # record_metrics(data)
+        record_metrics(data)
 
         timestamp = data.get("timestamp") or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
 
@@ -250,13 +239,13 @@ async def log_message(request: Request):
 # =========================
 # expose health metric endpoint for prometheus metric data
 # =========================
-# @app.get("/metrics")
-# async def metrics():
-#     """Prometheus metrics endpoint"""
-#     return Response(
-#         content=generate_latest(),
-#         media_type="text/plain"
-#     )
+@app.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint"""
+    return Response(
+        content=generate_latest(),
+        media_type="text/plain"
+    )
 
 
 # =========================

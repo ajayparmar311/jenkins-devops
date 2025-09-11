@@ -6,7 +6,7 @@ receivers:
       grpc:
         endpoint: 0.0.0.0:4317
   hostmetrics:
-    collection_interval: 30s
+    collection_interval: 60s
     root_path: /hostfs
     scrapers:
       cpu:
@@ -117,7 +117,14 @@ processors:
           - delete_matching_keys(attributes, "telemetry.sdk.language")
           - delete_matching_keys(attributes, "telemetry.sdk.version")
           - delete_matching_keys(attributes, "os.type")
-
+  
+  transform/delta:
+    error_mode: ignore
+    metric_statements:
+      - context: datapoint
+        statements:
+          - convert_sum_to_delta()
+          - drop_if(dp.value_double == 0.0)
 
 exporters:
   rabbitmq:
@@ -162,14 +169,19 @@ exporters:
 service:
   extensions: [otlp_encoding/rabbitmq]
   pipelines:
-    #metrics:
-    #  receivers: [hostmetrics]
-    #  processors: [transform/remove_scope, transform/remove_attrs,batch]
-    #  exporters: [rabbitmq]
-    metrics/custom:
-      receivers: [prometheus]
-      processors: [filter/drop_scrape_metrics,transform/remove_scope, transform/remove_attrs,batch]
+    metrics:
+      receivers: [hostmetrics]
+      processors: [transform/delta,transform/remove_scope, transform/remove_attrs,batch]
       exporters: [rabbitmq]
+    # metrics/custom:
+    #   receivers: [prometheus]
+    #   processors: [filter/drop_scrape_metrics,transform/remove_scope, transform/remove_attrs,batch]
+    #   exporters: [rabbitmq]
+    metrics/custom:
+      receivers: [otlp]  
+      processors: [batch, transform/remove_scope, transform/remove_attrs]
+      exporters: [rabbitmq]
+    
     #logs:
     #  receivers: [otlp]
     #  processors: [memory_limiter,batch]

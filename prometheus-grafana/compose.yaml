@@ -40,19 +40,19 @@ services:
   #   restart: unless-stopped
   #   networks:
   #     - monitoring
-  #grafana:
-  #  image: grafana/grafana
-  #  container_name: grafana
-  #  networks:
-  #    - monitoring
-  #  ports:
-  #    - 3000:3000
-  #  restart: unless-stopped
-  #  environment:
-  #    - GF_SECURITY_ADMIN_USER=admin
-  #    - GF_SECURITY_ADMIN_PASSWORD=grafana
-  #  volumes:
-  #    - ./grafana:/etc/grafana/provisioning/datasources
+  grafana:
+   image: grafana/grafana
+   container_name: grafana
+   networks:
+     - monitoring
+   ports:
+     - 3000:3000
+   restart: unless-stopped
+   environment:
+     - GF_SECURITY_ADMIN_USER=admin
+     - GF_SECURITY_ADMIN_PASSWORD=grafana
+   volumes:
+     - ./grafana:/etc/grafana/provisioning/datasources
   #alertmanager:
   #  image: prom/alertmanager
   #  container_name: alertmanager
@@ -145,11 +145,13 @@ services:
       context: ./otel/python-app-otlp/app 
       dockerfile: Dockerfile
     container_name: python-app
-    # environment:
-    #   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-    #   OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true"
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true"
+      GOOGLE_APPLICATION_CREDENTIALS: /app/key.json
     volumes:
       - ./otel/python-app-otlp/logs:/logs  # Shared logs directory
+      - ./secrets_and-keys/my-kube-project-429018-47e6566c031a.json:/app/key.json
     ports:
       - "5000:5000"
       - "8000:8000"
@@ -223,9 +225,45 @@ services:
     restart: unless-stopped
     networks:
       - monitoring
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: jenkins
+    restart: unless-stopped
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./jenkins-data:/var/jenkins_home
+      - ./scripts:/scripts
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    networks:
+      - monitoring
+    privileged: true
+
+  # Optional: Docker daemon for Docker-in-Docker
+  docker-dind:
+    image: docker:dind
+    container_name: jenkins-docker
+    restart: unless-stopped
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=
+    volumes:
+      - docker-data:/var/lib/docker
+    networks:
+      - monitoring
 
 volumes:
   prom_data:
   mysql_data:
+  jenkins_home:
+    driver: local
+  docker-data:
+    driver: local
 networks:
   monitoring:
